@@ -99,7 +99,7 @@ fn main() -> Result<()> {
         Add(item) => {
             let item_text = item.item;
             insert(&conn, &item_text).expect("Failed to insert an item");
-            println!("Added item: {}", item_text);
+            println!("{} {}", "Added item:".white().bold(), item_text);
         }
         Show => {
             show(&conn).expect("Failed to show items");
