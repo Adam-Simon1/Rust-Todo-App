@@ -2,10 +2,10 @@ mod args;
 
 use args::Todo;
 use clap::Parser;
+use colored::*;
 use dotenv::dotenv;
 use rusqlite::{Connection, Result};
 use std::env;
-use std::process::id;
 
 use args::EntityType::Add;
 use args::EntityType::Remove;
@@ -50,7 +50,7 @@ fn show(conn: &Connection) -> Result<()> {
 
     for todo in todos_iter {
         let todo = todo.unwrap();
-        println!("{} {}", todo.id, todo.items);
+        println!("{} {}", todo.id.to_string().bold().white(), todo.items);
     }
 
     Ok(())
@@ -66,23 +66,21 @@ fn remove(conn: &Connection, index: i32) -> Result<()> {
         })
     })?;
 
-    conn.execute("DELETE FROM todos WHERE id = ?1", [index])?;
-
-    println!("Remaining items:");
-    
     for todo in todos_iter {
         let todo = todo.unwrap();
-        let mut text = todo.items.clone();
+        let id_text = todo.id.to_string().bold().white();
+        let items_text = if Some(todo.id) == Some(index) {
+            todo.items.strikethrough().to_string()
+        } else {
+            todo.items.clone()
+        };
 
-        if todo.id == index {
-            text = format!("\x1B[9m{}\x1B[0m", todo.items);
-        }
-
-        
-        println!("{} {}", todo.id, text);
+        println!("{} {}", id_text, items_text);
     }
 
-    conn.execute("UPDATE todos SET id = id - 1 WHERE id > 1", [])?;
+    conn.execute("DELETE FROM todos WHERE id = ?1", [index])?;
+
+    conn.execute("UPDATE todos SET id = id - 1 WHERE id > ?1", [index])?;
 
     Ok(())
 }
@@ -93,22 +91,22 @@ fn main() -> Result<()> {
 
     let conn = Connection::open(db_file)?;
 
-    create_table(&conn).expect("Error creating table");
+    create_table(&conn).expect("Failed to create table");
 
     let todo: Todo = Todo::parse();
 
     match todo.entity_type {
         Add(item) => {
-            let str = item.item;
-            insert(&conn, &str).expect("Error inserting item");
-            println!("Added item: {}", str);
+            let item_text = item.item;
+            insert(&conn, &item_text).expect("Failed to insert an item");
+            println!("Added item: {}", item_text);
         }
         Show => {
-            show(&conn).expect("Error showing items");
+            show(&conn).expect("Failed to show items");
         }
         Remove(index) => {
-            let int = index.index;
-            remove(&conn, int).expect("Error removing item");
+            let item_id = index.index;
+            remove(&conn, item_id).expect("Failed to remove an item");
         }
     }
 
