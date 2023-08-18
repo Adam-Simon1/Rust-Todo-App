@@ -16,9 +16,17 @@ pub enum EntityType {
 
     /// Show the list of todo items
     Show,
+
+    /// Remove a todo item
+    Remove(Remove),
 }
 
 #[derive(Debug, Args)]
 pub struct Add {
     pub item: String,
+}
+
+#[derive(Debug, Args)]
+pub struct Remove {
+    pub index: i32,
 }

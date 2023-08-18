@@ -5,18 +5,23 @@ use clap::Parser;
 use dotenv::dotenv;
 use rusqlite::{Connection, Result};
 use std::env;
+use std::process::id;
 
 use args::EntityType::Add;
+use args::EntityType::Remove;
 use args::EntityType::Show;
 
 struct TodoItem {
+    id: i32,
     items: String,
 }
 
 fn create_table(conn: &Connection) -> Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS todos ( 
-        items TEXT)",
+        id INTEGER PRIMARY KEY,
+        items TEXT
+    )",
         [],
     )?;
 
@@ -24,20 +29,60 @@ fn create_table(conn: &Connection) -> Result<()> {
 }
 
 fn insert(conn: &Connection, item: &str) -> Result<()> {
-    conn.execute("INSERT INTO todos (items) VALUES (?1)", [&item])?;
+    conn.execute(
+        "INSERT INTO todos (id, items)
+    VALUES ((SELECT IFNULL(MAX(id), 0) + 1 FROM todos), ?1);
+    ",
+        [item],
+    )?;
 
     Ok(())
 }
 
 fn show(conn: &Connection) -> Result<()> {
-    let mut stmt = conn.prepare("SELECT items FROM todos")?;
-    let todos_iter = stmt.query_map([], |row| Ok(TodoItem { items: row.get(0)? }))?;
+    let mut stmt = conn.prepare("SELECT id, items FROM todos")?;
+    let todos_iter = stmt.query_map([], |row| {
+        Ok(TodoItem {
+            id: row.get(0)?,
+            items: row.get(1)?,
+        })
+    })?;
 
-    let mut index = 0;
     for todo in todos_iter {
-        index += 1;
-        println!("{} {}", index, todo.unwrap().items);
+        let todo = todo.unwrap();
+        println!("{} {}", todo.id, todo.items);
     }
+
+    Ok(())
+}
+
+fn remove(conn: &Connection, index: i32) -> Result<()> {
+    let mut stmt = conn.prepare("SELECT * FROM todos")?;
+
+    let todos_iter = stmt.query_map([], |row| {
+        Ok(TodoItem {
+            id: row.get(0)?,
+            items: row.get(1)?,
+        })
+    })?;
+
+    conn.execute("DELETE FROM todos WHERE id = ?1", [index])?;
+
+    println!("Remaining items:");
+    
+    for todo in todos_iter {
+        let todo = todo.unwrap();
+        let mut text = todo.items.clone();
+
+        if todo.id == index {
+            text = format!("\x1B[9m{}\x1B[0m", todo.items);
+        }
+
+        
+        println!("{} {}", todo.id, text);
+    }
+
+    conn.execute("UPDATE todos SET id = id - 1 WHERE id > 1", [])?;
 
     Ok(())
 }
@@ -60,6 +105,10 @@ fn main() -> Result<()> {
         }
         Show => {
             show(&conn).expect("Error showing items");
+        }
+        Remove(index) => {
+            let int = index.index;
+            remove(&conn, int).expect("Error removing item");
         }
     }
 
