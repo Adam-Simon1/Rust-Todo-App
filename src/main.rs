@@ -1,17 +1,13 @@
+mod args;
+
+use args::Todo;
 use clap::Parser;
 use dotenv::dotenv;
 use rusqlite::{Connection, Result};
 use std::env;
 
-/// Simple program to create a todo list
-#[derive(Parser)]
-#[command(author, version, about, long_about = None)]
-
-struct Todo {
-    /// Add a todo item
-    #[arg(short, long)]
-    add: String,
-}
+use args::EntityType::Add;
+use args::EntityType::Show;
 
 struct TodoItem {
     items: String,
@@ -37,8 +33,10 @@ fn show(conn: &Connection) -> Result<()> {
     let mut stmt = conn.prepare("SELECT items FROM todos")?;
     let todos_iter = stmt.query_map([], |row| Ok(TodoItem { items: row.get(0)? }))?;
 
+    let mut index = 0;
     for todo in todos_iter {
-        println!("{}", todo.unwrap().items);
+        index += 1;
+        println!("{} {}", index, todo.unwrap().items);
     }
 
     Ok(())
@@ -54,11 +52,16 @@ fn main() -> Result<()> {
 
     let todo: Todo = Todo::parse();
 
-    if !todo.add.is_empty() {
-        insert(&conn, &todo.add).expect("Error inserting item");
+    match todo.entity_type {
+        Add(item) => {
+            let str = item.item;
+            insert(&conn, &str).expect("Error inserting item");
+            println!("Added item: {}", str);
+        }
+        Show => {
+            show(&conn).expect("Error showing items");
+        }
     }
-
-    println!("{}", todo.add);
 
     Ok(())
 }
